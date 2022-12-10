@@ -90,11 +90,9 @@ def get_lb_hourly_costs(session):
     return hourly_costs
 
 
-def delete_tgs(session, region, profile, tgs, dry_run=False):
+def delete_tgs(session, tgs, dry_run=False):
     # Create an AWS client for the Elastic Load Balancing service
     elb_client = session.client("elbv2")
-
-    print(f"deleting elbv2 resources with profile {profile} in region {region}...")
 
     pbar = tqdm(tgs)
     for tg_arn in pbar:
@@ -108,12 +106,17 @@ def delete_tgs(session, region, profile, tgs, dry_run=False):
     return None
 
 
-def delete_lbs(session, region, profile, lbs, dry_run=False):
+def disable_lb_deletion_protection(client, lb_arn):
+    client.modify_load_balancer_attributes(
+        LoadBalancerArn=lb_arn,
+        Attributes=[{"Key": "deletion_protection.enabled", "Value": "false"}],
+    )
+
+
+def delete_lbs(session, lbs, dry_run=False):
     # Create an AWS client for the Elastic Load Balancing service
     elb_client = session.client("elbv2")
     waiter = elb_client.get_waiter("load_balancers_deleted")
-
-    print(f"deleting elbv2 resources with profile {profile} in region {region}...")
 
     pbar = tqdm(lbs)
     for lb_arn in pbar:
@@ -133,12 +136,7 @@ def delete_lbs(session, region, profile, lbs, dry_run=False):
                     pbar.write(
                         f"Load balancer {lb_arn} has deletion protection enabled, disabling..."
                     )
-                    elb_client.modify_load_balancer_attributes(
-                        LoadBalancerArn=lb_arn,
-                        Attributes=[
-                            {"Key": "deletion_protection.enabled", "Value": "false"}
-                        ],
-                    )
+                    disable_lb_deletion_protection(elb_client, lb_arn)
 
                 del_result = elb_client.delete_load_balancer(LoadBalancerArn=lb_arn)
 
@@ -157,21 +155,12 @@ def delete_lbs(session, region, profile, lbs, dry_run=False):
         pbar.write(f"deleted load balancer {lb_arn} (dry run: {dry_run})")
 
         # Delete the target groups
-        for target_group_arn in lbs[lb_arn]["empty_target_groups"]:
-            if not dry_run:
-                # elb_client.detach_target_groups(TargetGroupArn=target_group_arn, LoadBalancerArn=lb_arn)
-                try:
-                    elb_client.delete_target_group(TargetGroupArn=target_group_arn)
-                except Exception as e:
-                    pbar.write(
-                        f"Failed to delete target group {target_group_arn} with error {e}"
-                    )
-            pbar.write(f"deleted target group {target_group_arn} (dry run: {dry_run})")
+        delete_tgs(session, lbs[lb_arn]["empty_target_groups"])
 
     return None
 
 
-def get_tgs_no_targets_or_lb(session, region, profile):
+def get_tgs_no_targets_or_lb(session):
     # Create an elbv2 client
     elb_client = session.client("elbv2")
 
@@ -202,13 +191,15 @@ def get_tgs_no_targets_or_lb(session, region, profile):
     return tgs
 
 
-def get_lbs_no_targets(session, region, profile):
+def get_lbs_no_targets(session, region, omit_pricing=False):
     # Create an AWS client for the Elastic Load Balancing service
     elb_client = session.client("elbv2")
 
     # Get the hourly costs of the load balancers
     print("getting hourly costs of load balancers...")
-    hourly_costs = get_lb_hourly_costs(session)
+
+    if not omit_pricing:
+        hourly_costs = get_lb_hourly_costs(session)
 
     # Get the list of load balancers in the specified region
     response = elb_client.describe_load_balancers()
@@ -220,15 +211,18 @@ def get_lbs_no_targets(session, region, profile):
     # List to store the ARNs of load balancers with no targets
     lbs = {}
 
-    print(f"analyzing elbv2 resources with profile {profile} in region {region}...")
-
     # Iterate over the load balancers
     for lb in tqdm(response["LoadBalancers"]):
         # Get the ARN of the load balancer
         lb_arn = lb["LoadBalancerArn"]
 
-        # Get the monthly cost of the load balancer
-        lb_cost_value = float(list(hourly_costs[lb["Type"]][region].values())[0]) * 730
+        if not omit_pricing:
+            # Get the monthly cost of the load balancer
+            lb_cost_value = (
+                float(list(hourly_costs[lb["Type"]][region].values())[0]) * 730
+            )
+        else:
+            lb_cost_value = 0
 
         lb_target_groups = {
             tg["TargetGroupArn"]: elb_client.describe_target_health(
