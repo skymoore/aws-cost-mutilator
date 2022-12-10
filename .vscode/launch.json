@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "clean",
+            "type": "python",
+            "request": "launch",
+            "module": "aws_cost_mutilator.__main__",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "clean",
+                "lbs",
+                "--region",
+                "us-west-2",
+                "--profile",
+                "prod-adm",
+                //"--dry-run"
+            ],
+            // "envFile": "${workspaceFolder}/.env",
+            "justMyCode": true
+        },
+        {
+            "name": "check",
+            "type": "python",
+            "request": "launch",
+            "module": "aws_cost_mutilator.__main__",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "check",
+                "tgs",
+                "--region",
+                "us-west-2",
+                "--profile",
+                "prod-adm",
+            ],
+            // "envFile": "${workspaceFolder}/.env",
+            "justMyCode": true
+        },
+    ]
+}
