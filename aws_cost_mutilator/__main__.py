@@ -26,7 +26,7 @@ def check(region, profile):
 @click.option("--profile", help="The AWS profile to use")
 def tgs(region, profile):
     session = boto_session(region, profile)
-    target_groups = get_tgs_no_targets_or_lb(session, region, profile)
+    target_groups = get_tgs_no_targets_or_lb(session)
 
     if len(target_groups) == 0:
         print("No target groups without targets or load balancers found!")
@@ -44,7 +44,7 @@ def tgs(region, profile):
 def lbs(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = get_lbs_no_targets(session, region, profile)
+    load_balancers = get_lbs_no_targets(session)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
@@ -77,7 +77,7 @@ def clean(region, profile, dry_run):
 @click.option("--dry-run", is_flag=True, help="Perform a dry run")
 def tgs(region, profile, dry_run):
     session = boto_session(region, profile)
-    target_groups = get_tgs_no_targets_or_lb(session, region, profile)
+    target_groups = get_tgs_no_targets_or_lb(session)
 
     num_tgs = len(target_groups)
 
@@ -101,7 +101,7 @@ def tgs(region, profile, dry_run):
         if dry_run:
             print("Dry run mode enabled, no resources will be deleted.")
 
-        delete_tgs(session, region, profile, target_groups, dry_run)
+        delete_tgs(session, target_groups, dry_run)
 
         print(f"Deleted {num_tgs} target groups.")
         # print(
@@ -122,7 +122,7 @@ def tgs(region, profile, dry_run):
 def lbs(region, profile, dry_run):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = get_lbs_no_targets(session, region, profile)
+    load_balancers = get_lbs_no_targets(session, region)
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
     num_lbs = len(load_balancers)
@@ -145,7 +145,7 @@ def lbs(region, profile, dry_run):
         if dry_run:
             print("Dry run mode enabled, no resources will be deleted.")
 
-        delete_lbs(session, region, profile, load_balancers, dry_run)
+        delete_lbs(session, load_balancers, dry_run)
 
         print(
             f"Deleted {num_lbs} load balancers and their associated target groups saving ${total_monthly_cost:.2f} per month."
