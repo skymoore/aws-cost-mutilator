@@ -18,6 +18,12 @@ jobs:
         python-version: ["3.9", "3.10", "3.11"]
 
     steps:
+      - uses: Fooji/create-aws-profile-action@v1
+        with:
+          profile: default
+          region: us-west-2
+          key: mock_access_key
+          secret: mock_secret_key
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
@@ -35,3 +41,7 @@ jobs:
       - name: Build
         run: |
           python -m pip install .
+          python -m pip install -r requirements-test.txt
+      - name: Test
+        run: |
+          python -m pytest aws_cost_mutilator/tests.py
