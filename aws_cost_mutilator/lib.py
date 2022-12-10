@@ -4,15 +4,14 @@ from time import sleep
 
 
 def boto_session(region, profile):
-    session = boto3.Session(region_name=region, profile_name=profile)
-
     try:
+        session = boto3.Session(region_name=region, profile_name=profile)
         session.client("sts").get_caller_identity()
         return session
 
     except Exception as e:
         print(f"Error: {e}")
-        exit(1)
+        return None
 
 
 def get_lb_hourly_costs(session):
