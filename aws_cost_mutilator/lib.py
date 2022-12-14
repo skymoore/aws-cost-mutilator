@@ -160,7 +160,16 @@ def delete_lbs(session, lbs, dry_run=False):
     return None
 
 
-def get_tgs_no_targets_or_lb(session):
+def delete_ebs_volumes(volume_ids, session, dry_run=False):
+    ec2 = session.resource("ec2")
+    for volume_id in volume_ids:
+        volume = ec2.Volume(volume_id)
+        print("Deleting volume {}".format(volume_id))
+        if not dry_run:
+            volume.delete()
+
+
+def scan_for_tgs_no_targets_or_lb(session):
     # Create an elbv2 client
     elb_client = session.client("elbv2")
 
@@ -191,7 +200,7 @@ def get_tgs_no_targets_or_lb(session):
     return tgs
 
 
-def get_lbs_no_targets(session, region, omit_pricing=False):
+def scan_for_lbs_no_targets(session, region, omit_pricing=False):
     # Create an AWS client for the Elastic Load Balancing service
     elb_client = session.client("elbv2")
 
@@ -270,3 +279,43 @@ def get_lbs_no_targets(session, region, omit_pricing=False):
     lbs["total_monthly_cost"] = sum([lbs[lb]["monthly_cost"] for lb in lbs])
 
     return lbs
+
+
+def scan_for_unused_ebs_volumes(session):
+    client = session.client("ec2")
+
+    cost_per_gb_map = {
+        "gp3": 0.08,
+        "gp2": 0.1,
+        "io1": 0.125,
+        "st1": 0.045,
+        "sc1": 0.025,
+        "standard": 0.05,
+    }
+
+    # Get the list of all EBS volumes in the region
+    volumes = client.describe_volumes()["Volumes"]
+
+    # Filter the list to include only volumes that are not attached to any EC2 instances
+    print("getting unused ebs volumes...")
+    unused_volumes = {
+        "volumes": [
+            {
+                "VolumeId": volume["VolumeId"],
+                "Size": volume["Size"],
+                "CreateTime": str(volume["CreateTime"]),
+                "MultiAttachEnabled": volume["MultiAttachEnabled"],
+                "Attachments": volume["Attachments"],
+                "MonthlyCost": volume["Size"] * cost_per_gb_map[volume["VolumeType"]],
+            }
+            for volume in tqdm(volumes)
+            if volume["State"] == "available"
+        ]
+    }
+
+    unused_volumes["total_monthly_cost"] = sum(
+        [volume["MonthlyCost"] for volume in unused_volumes["volumes"]]
+    )
+
+    # Return the list of unused EBS volumes
+    return unused_volumes

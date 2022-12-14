@@ -1,10 +1,12 @@
 import click, json
 from .lib import (
-    get_lbs_no_targets,
+    scan_for_lbs_no_targets,
     delete_lbs,
     boto_session,
-    get_tgs_no_targets_or_lb,
+    scan_for_tgs_no_targets_or_lb,
     delete_tgs,
+    scan_for_unused_ebs_volumes,
+    delete_ebs_volumes,
 )
 
 
@@ -24,9 +26,30 @@ def check(region, profile):
 @check.command()
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
+def ebs(region, profile):
+    session = boto_session(region, profile)
+    unused_ebs_volumes = scan_for_unused_ebs_volumes(session)
+    total_monthly_cost = unused_ebs_volumes["total_monthly_cost"]
+    del unused_ebs_volumes["total_monthly_cost"]
+
+    if len(unused_ebs_volumes) == 0:
+        print("No unused EBS volumes found!")
+        return
+
+    print(f"There are {len(unused_ebs_volumes['volumes'])} unused EBS volumes:")
+    print(json.dumps(unused_ebs_volumes["volumes"], indent=4))
+    print(
+        f"Run:\n\nacm clean ebs --region {region} --profile {profile}\n\nto delete these resources and save ${total_monthly_cost:.2f} per month"
+    )
+    exit(0)
+
+
+@check.command()
+@click.option("--region", help="The AWS region to use")
+@click.option("--profile", help="The AWS profile to use")
 def tgs(region, profile):
     session = boto_session(region, profile)
-    target_groups = get_tgs_no_targets_or_lb(session)
+    target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     if len(target_groups) == 0:
         print("No target groups without targets or load balancers found!")
@@ -44,7 +67,7 @@ def tgs(region, profile):
 def lbs(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = get_lbs_no_targets(session)
+    load_balancers = scan_for_lbs_no_targets(session)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
@@ -77,7 +100,7 @@ def clean(region, profile, dry_run):
 @click.option("--dry-run", is_flag=True, help="Perform a dry run")
 def tgs(region, profile, dry_run):
     session = boto_session(region, profile)
-    target_groups = get_tgs_no_targets_or_lb(session)
+    target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     num_tgs = len(target_groups)
 
@@ -122,7 +145,7 @@ def tgs(region, profile, dry_run):
 def lbs(region, profile, dry_run):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = get_lbs_no_targets(session, region)
+    load_balancers = scan_for_lbs_no_targets(session, region)
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
     num_lbs = len(load_balancers)
@@ -151,6 +174,45 @@ def lbs(region, profile, dry_run):
             f"Deleted {num_lbs} load balancers and their associated target groups saving ${total_monthly_cost:.2f} per month."
         )
 
+    else:
+        # Exit the program if the response was "no" or anything else
+        print("Aborted")
+
+    exit(0)
+
+
+@clean.command()
+@click.option("--region", help="The AWS region to use")
+@click.option("--profile", help="The AWS profile to use")
+@click.option("--dry-run", is_flag=True, help="Perform a dry run")
+def ebs(region, profile, dry_run):
+    session = boto_session(region, profile)
+    unused_ebs_volumes = scan_for_unused_ebs_volumes(session)
+    total_monthly_cost = unused_ebs_volumes["total_monthly_cost"]
+    del unused_ebs_volumes["total_monthly_cost"]
+
+    if len(unused_ebs_volumes) == 0:
+        print("No unused EBS volumes found!")
+        return
+
+    print(f"There are {len(unused_ebs_volumes['volumes'])} unused EBS volumes:")
+    print(json.dumps(unused_ebs_volumes["volumes"], indent=4))
+
+    # Ask the user for confirmation
+    response = input(
+        f"Are you sure you want to continue? This will delete {len(unused_ebs_volumes['volumes'])} EBS volumes. (yes/no): "
+    )
+    if response == "yes":
+        # Execute the code if the response was "yes"
+        if dry_run:
+            print("Dry run mode enabled, no resources will be deleted.")
+
+        delete_ebs_volumes(
+            session, [vol["VolumeId"] for vol in unused_ebs_volumes], dry_run
+        )
+        print(
+            f"Deleted {len(unused_ebs_volumes['volumes'])} EBS volumes saving ${total_monthly_cost:.2f} per month."
+        )
     else:
         # Exit the program if the response was "no" or anything else
         print("Aborted")

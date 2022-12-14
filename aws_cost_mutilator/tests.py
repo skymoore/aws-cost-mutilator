@@ -179,7 +179,7 @@ def test_disable_lb_deletion_protection():
 
 @mock_ec2
 @mock_elbv2
-def test_get_tgs_no_targets_or_lb():
+def test_scan_for_tgs_no_targets_or_lb():
     # Create a mock AWS session
     session = boto3.Session(
         region_name="us-east-1",
@@ -226,7 +226,7 @@ def test_get_tgs_no_targets_or_lb():
     )["Listeners"][0]["ListenerArn"]
 
     # Call the get_tgs_no_targets_or_lb function
-    target_groups = get_tgs_no_targets_or_lb(session)
+    target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     # Verify that the target group is returned by the function
     assert tg_arn in target_groups
@@ -263,7 +263,7 @@ def test_get_tgs_no_targets_or_lb():
     )
 
     # Call the get_tgs_no_targets_or_lb function
-    target_groups = get_tgs_no_targets_or_lb(session)
+    target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     # Verify that the target group is not returned by the function
     assert tg_arn not in target_groups
@@ -283,7 +283,7 @@ def test_get_tgs_no_targets_or_lb():
     )
 
     # Call the get_tgs_no_targets_or_lb function
-    target_groups = get_tgs_no_targets_or_lb(session)
+    target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     # Verify that the target group is returned by the function
     assert tg_arn in target_groups
@@ -291,7 +291,7 @@ def test_get_tgs_no_targets_or_lb():
 
 @mock_ec2
 @mock_elbv2
-def test_get_lbs_no_targets():
+def test_scan_for_lbs_no_targets():
     region = "us-east-1"
     # Create a mock AWS session
     session = boto3.Session(
@@ -339,6 +339,40 @@ def test_get_lbs_no_targets():
     )["Listeners"][0]["ListenerArn"]
 
     # Call the get_lbs_no_targets function
-    load_balancers = get_lbs_no_targets(session, region, omit_pricing=True)
+    load_balancers = scan_for_lbs_no_targets(session, region, omit_pricing=True)
 
     assert elb_arn in load_balancers
+
+
+@mock_ec2
+def test_scan_for_unused_ebs_volumes():
+    session = boto3.Session(region_name="us-east-1")
+    client = session.client("ec2")
+
+    # Create an EBS volume
+    client.create_volume(AvailabilityZone="us-east-1a", Size=1, VolumeType="gp2")
+
+    # Get the list of all EBS volumes in the region
+    volumes = client.describe_volumes()["Volumes"]
+
+    # Filter the list to include only volumes that are not attached to any EC2 instances
+    unused_volumes = [volume for volume in volumes if volume["State"] == "available"]
+
+    # Assert that the list is not empty
+    assert len(unused_volumes) > 0
+
+    # Assert that the list contains the EBS volume that we created
+    assert len([volume for volume in unused_volumes if volume["Size"] == 1]) == 1
+
+
+@mock_ec2
+def test_delete_ebs_volumes():
+    session = boto3.Session(region_name="us-east-1")
+    ec2 = session.resource("ec2")
+
+    # create a volume to delete
+    volume = ec2.create_volume(AvailabilityZone="us-east-1a", Size=10)
+
+    # delete the volume and confirm it is deleted
+    assert delete_ebs_volumes([volume.id], session) is None
+    assert list(ec2.volumes.all()) == []
