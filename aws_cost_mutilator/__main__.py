@@ -7,6 +7,8 @@ from .lib import (
     delete_tgs,
     scan_for_unused_ebs_volumes,
     delete_ebs_volumes,
+    get_old_snapshots,
+    estimate_snapshots_cost,
 )
 
 
@@ -23,10 +25,10 @@ def check(region, profile):
     pass
 
 
-@check.command()
+@check.command("ebs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def ebs(region, profile):
+def ebs_(region, profile):
     session = boto_session(region, profile)
     unused_ebs_volumes = scan_for_unused_ebs_volumes(session)
     total_monthly_cost = unused_ebs_volumes["total_monthly_cost"]
@@ -44,10 +46,35 @@ def ebs(region, profile):
     exit(0)
 
 
-@check.command()
+@check.command("ebsnap")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def tgs(region, profile):
+@click.option("--older-than", type=int, help="Find snapshots older than this many days")
+def ebs_snapshots_(region, profile, older_than):
+    session = boto_session(region, profile)
+    old_snapshots = get_old_snapshots(session, older_than)
+
+    if len(old_snapshots) == 0:
+        print("No old EBS snapshots found!")
+        exit(0)
+
+    else:
+        total_monthly_cost = estimate_snapshots_cost(session, old_snapshots)
+
+    print(
+        f"There are {len(old_snapshots)} EBS snapshots older than {older_than} {'day' if older_than == 1 else 'days'}:"
+    )
+    print(json.dumps(old_snapshots, indent=4))
+    print(
+        f"Run:\n\nacm clean ebsnap --region {region} --profile {profile} --older-than 90\n\nto delete these resources and save ${total_monthly_cost:.2f} per month"
+    )
+    exit(0)
+
+
+@check.command("tgs")
+@click.option("--region", help="The AWS region to use")
+@click.option("--profile", help="The AWS profile to use")
+def tgs_(region, profile):
     session = boto_session(region, profile)
     target_groups = scan_for_tgs_no_targets_or_lb(session)
 
@@ -61,13 +88,13 @@ def tgs(region, profile):
     print(json.dumps(target_groups, indent=4))
 
 
-@check.command()
+@check.command("lbs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def lbs(region, profile):
+def lbs_(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = scan_for_lbs_no_targets(session)
+    load_balancers = scan_for_lbs_no_targets(session, region)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]

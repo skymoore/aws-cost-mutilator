@@ -1,6 +1,7 @@
 import boto3, json
 from tqdm import tqdm
 from time import sleep
+from datetime import datetime, timedelta
 
 
 def boto_session(region, profile):
@@ -120,7 +121,6 @@ def delete_lbs(session, lbs, dry_run=False):
 
     pbar = tqdm(lbs)
     for lb_arn in pbar:
-
         if not dry_run and "populated_target_groups" not in lbs[lb_arn]:
             # Delete the load balancer
             try:
@@ -167,6 +167,108 @@ def delete_ebs_volumes(volume_ids, session, dry_run=False):
         print("Deleting volume {}".format(volume_id))
         if not dry_run:
             volume.delete()
+
+
+def estimate_snapshots_cost(session, snapshot_ids):
+    ec2 = session.client("ec2")
+
+    # Pricing details (as of September 2021)
+    # This value might change, so you should update it based on the current pricing details
+    price_per_gb_month = 0.05
+
+    # Get the size of each snapshot
+    total_size_gb = 0
+    for snapshot_id in snapshot_ids:
+        snapshot = ec2.describe_snapshots(SnapshotIds=[snapshot_id])["Snapshots"][0]
+        total_size_gb += snapshot["VolumeSize"]
+
+    # Calculate the estimated cost
+    cost = total_size_gb * price_per_gb_month
+
+    return cost
+
+
+def delete_ebs_snapshots(snapshot_ids, session, dry_run=False):
+    ec2 = session.client("ec2")
+    for snapshot_id in snapshot_ids:
+        print("Deleting snapshot {}".format(snapshot_id))
+        if not dry_run:
+            ec2.delete_snapshot(SnapshotId=snapshot_id)
+
+
+def get_old_snapshots(session, days):
+    ec2 = session.client("ec2")
+
+    # Get the current time
+    now = datetime.now()
+
+    # Get all snapshots
+    snapshots = ec2.describe_snapshots(OwnerIds=["self"])["Snapshots"]
+
+    # Filter out snapshots that are more than 'days' old
+    old_snapshots = [
+        snapshot["SnapshotId"]
+        for snapshot in snapshots
+        if (now - snapshot["StartTime"].replace(tzinfo=None)) > timedelta(days=days)
+    ]
+
+    return old_snapshots
+
+
+def get_bucket_cost(session, bucket_name):
+    # Get the S3 client
+    s3 = session.client("s3")
+
+    # Get the size of all of the objects in the bucket
+    size = 0
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket_name):
+        for obj in page["Contents"]:
+            size += obj["Size"]
+
+    # Calculate the cost based on the size of the data
+    # (Assumes the standard S3 pricing model with a cost of $0.023 per GB per month)
+    cost = size / 1024**3 * 0.023
+
+    return cost
+
+
+def get_old_buckets(session):
+    # Get the current time and subtract one year to find the cutoff time
+    cutoff_time = datetime.utcnow() - timedelta(days=365)
+
+    # Get the S3 client
+    s3 = session.client("s3")
+
+    # Initialize an empty list to store the bucket names
+    old_buckets = []
+
+    # List all of the buckets in the account
+    response = s3.list_buckets()
+    buckets = response["Buckets"]
+
+    # Iterate through the buckets
+    for bucket in buckets:
+        # Get the name of the bucket
+        bucket_name = bucket["Name"]
+
+        # Check if the bucket is empty
+        response = s3.list_objects_v2(Bucket=bucket_name)
+        if "Contents" not in response:
+            # If the bucket is empty, add it to the list
+            old_buckets.append(bucket_name)
+            continue
+
+        # If the bucket is not empty, check the age of the newest object
+        newest_object = response["Contents"][0]
+        newest_object_time = newest_object["LastModified"]
+
+        # If the newest object is older than the cutoff time, add the bucket to the list
+        if newest_object_time < cutoff_time:
+            old_buckets.append(bucket_name)
+
+    # Return the list of old buckets
+    return old_buckets
 
 
 def scan_for_tgs_no_targets_or_lb(session):

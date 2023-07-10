@@ -27,11 +27,13 @@
       "cwd": "${workspaceFolder}",
       "args": [
         "check",
-        "tgs",
+        "ebsnap",
         "--region",
         "us-west-2",
         "--profile",
-        "prod-adm"
+        "dev-adm",
+        "--older-than",
+        "90"
       ],
       // "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
@@ -42,7 +44,9 @@
       "request": "launch",
       "module": "pytest",
       "cwd": "${workspaceFolder}",
-      "args": ["aws_cost_mutilator/tests.py"],
+      "args": [
+        "aws_cost_mutilator/tests.py"
+      ],
       // "envFile": "${workspaceFolder}/.env",
       "justMyCode": true
     }
