@@ -9,6 +9,7 @@ from .lib import (
     delete_ebs_volumes,
     get_old_snapshots,
     estimate_snapshots_cost,
+    get_unused_iam_roles,
 )
 
 
@@ -23,6 +24,24 @@ def cli():
 @click.option("--profile", help="The AWS profile to use")
 def check(region, profile):
     pass
+
+
+@check.command("roles")
+@click.option("--region", help="The AWS region to use")
+@click.option("--profile", help="The AWS profile to use")
+@click.option("--days", type=int, help="Find roles unused for this many days")
+def roles_(region, profile, days):
+    session = boto_session(region, profile)
+    unused_roles = get_unused_iam_roles(session, days)
+
+    if len(unused_roles) == 0:
+        print("No unused IAM roles found!")
+        exit(0)
+
+    print(
+        f"There are {len(unused_roles)} IAM roles unused for more than {days} {'day' if days == 1 else 'days'}:"
+    )
+    print(json.dumps(unused_roles, indent=4))
 
 
 @check.command("ebs")
@@ -66,7 +85,7 @@ def ebs_snapshots_(region, profile, older_than):
     )
     print(json.dumps(old_snapshots, indent=4))
     print(
-        f"Run:\n\nacm clean ebsnap --region {region} --profile {profile} --older-than 90\n\nto delete these resources and save ${total_monthly_cost:.2f} per month"
+        f"Run:\n\nacm clean ebsnap --region {region} --profile {profile} --older-than {older_than}\n\nto delete these resources and save ${total_monthly_cost:.2f} per month"
     )
     exit(0)
 
