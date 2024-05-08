@@ -45,7 +45,7 @@ def tgs_(region, profile):
 def lbs_(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = get_lbs_no_targets(session)
+    load_balancers = get_lbs_no_targets(session, region)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
