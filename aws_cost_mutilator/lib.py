@@ -1,4 +1,5 @@
-import boto3, json
+import boto3
+import json
 from tqdm import tqdm
 from time import sleep
 

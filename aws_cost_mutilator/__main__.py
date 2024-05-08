@@ -1,4 +1,5 @@
-import click, json
+import click
+import json
 from .lib import (
     get_lbs_no_targets,
     delete_lbs,
@@ -24,7 +25,7 @@ def check(region, profile):
 @check.command()
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def tgs(region, profile):
+def tgs_(region, profile):
     session = boto_session(region, profile)
     target_groups = get_tgs_no_targets_or_lb(session)
 
@@ -41,7 +42,7 @@ def tgs(region, profile):
 @check.command()
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def lbs(region, profile):
+def lbs_(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
     load_balancers = get_lbs_no_targets(session)
