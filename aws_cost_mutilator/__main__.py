@@ -22,7 +22,7 @@ def check(region, profile):
     pass
 
 
-@check.command()
+@check.command("tgs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
 def tgs_(region, profile):
@@ -39,7 +39,7 @@ def tgs_(region, profile):
     print(json.dumps(target_groups, indent=4))
 
 
-@check.command()
+@check.command("lbs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
 def lbs_(region, profile):
