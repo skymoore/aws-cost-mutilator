@@ -24,6 +24,7 @@ include = "aws_cost_mutilator"
 
 [tool.poetry.scripts]
 acm = "aws_cost_mutilator.__main__:cli"
+test = "pytest:main"
 
 [build-system]
 requires = ["poetry-core"]

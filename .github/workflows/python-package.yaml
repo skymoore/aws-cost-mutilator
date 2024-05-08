@@ -38,7 +38,7 @@ jobs:
           black --check .
       - name: Build
         run: |
-          poetry install --system
+          poetry install
       - name: Test
         run: |
-          python -m pytest aws_cost_mutilator/tests.py
+          poetry run test aws_cost_mutilator/tests.py
