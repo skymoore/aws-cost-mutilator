@@ -1,13 +1,20 @@
 # AWS Cost Mutilator
-### It's what accounting craves.  
+## It's what accounting craves.  
 
-
-Usage:
+### Installation:
+```shell
+pip install aws-cost-mutilator
 ```
+
+
+### Usage:
+```shell
 acm [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  --help  Show this message and exit.
+  -p, --profile TEXT  AWS profile
+  -r, --region TEXT   AWS region
+  --help              Show this message and exit.
 
 Commands:
   check

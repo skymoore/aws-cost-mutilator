@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "clean",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "aws_cost_mutilator.__main__",
       "cwd": "${workspaceFolder}",
@@ -21,7 +21,7 @@
     },
     {
       "name": "check",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "aws_cost_mutilator.__main__",
       "cwd": "${workspaceFolder}",
@@ -40,7 +40,7 @@
     },
     {
       "name": "test",
-      "type": "python",
+      "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "cwd": "${workspaceFolder}",
