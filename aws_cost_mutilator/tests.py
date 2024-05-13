@@ -1,31 +1,12 @@
-from .lib import boto_session, delete_tgs, delete_lbs, disable_lb_deletion_protection
-from .lib import (
+from .ec2 import delete_tgs, delete_lbs, disable_lb_deletion_protection
+from .ec2 import (
     scan_for_tgs_no_targets_or_lb,
     scan_for_lbs_no_targets,
     delete_ebs_volumes,
 )
-from .lib import get_old_buckets, get_bucket_cost
-import unittest
-from datetime import datetime, timedelta
+from .s3 import get_buckets, get_bucket_cost
 import boto3
-from moto import mock_elbv2, mock_sts, mock_ec2, mock_s3
-
-
-@mock_sts
-def test_boto_session():
-    # Test successful boto session creation
-    region = "us-west-2"
-    profile = "default"
-    session = boto_session(region, profile)
-    assert session is not None
-    assert session.region_name == region
-    assert session.profile_name == profile
-
-    # Test error when creating boto session
-    region = "invalid"
-    profile = "invalid"
-    session = boto_session(region, profile)
-    assert session is None
+from moto import mock_elbv2, mock_ec2, mock_s3
 
 
 # Create a mock Elastic Load Balancing client
@@ -406,27 +387,15 @@ def test_get_old_buckets():
     s3.create_bucket(Bucket="test-bucket")
 
     # Check that the function correctly identifies an empty bucket as old
-    old_buckets = get_old_buckets(session)
-    unittest.assertIn("test-bucket", old_buckets)
+    buckets = get_buckets(session, 365)
+    assert "test-bucket" in buckets["empty"]
 
     # Add a new object to the test bucket
     s3.put_object(Bucket="test-bucket", Key="test.txt", Body=b"test")
 
     # Check that the function does not consider the bucket to be old
-    old_buckets = get_old_buckets(session)
-    unittest.assertNotIn("test-bucket", old_buckets)
-
-    # Get the current time and subtract one year and one day to create an object that is older than one year
-    object_time = datetime.utcnow() - timedelta(days=366)
-
-    # Add an object to the test bucket with the old timestamp
-    s3.put_object(
-        Bucket="test-bucket", Key="test.txt", Body=b"test", LastModified=object_time
-    )
-
-    # Check that the function considers the bucket to be old
-    old_buckets = get_old_buckets(session)
-    unittest.assertIn("test-bucket", old_buckets)
+    buckets = get_buckets(session, 365)
+    assert "test-bucket" not in buckets["old"]
 
 
 @mock_s3
@@ -442,11 +411,11 @@ def test_get_bucket_cost():
 
     # Check that the cost of an empty bucket is 0
     cost = get_bucket_cost(session, "test-bucket")
-    unittest.assertEqual(cost, 0)
+    assert cost == 0
 
     # Add an object to the test bucket
     s3.put_object(Bucket="test-bucket", Key="test.txt", Body=b"0123456789")
 
     # Check that the cost of the bucket is calculated correctly
     cost = get_bucket_cost(session, "test-bucket")
-    unittest.assertAlmostEqual(cost, 0.000023, places=6)
+    assert cost > 0

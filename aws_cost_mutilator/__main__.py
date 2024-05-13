@@ -12,7 +12,7 @@ from .ec2 import (
     get_old_snapshots,
     estimate_snapshots_cost,
 )
-from .s3 import get_old_buckets, get_bucket_cost
+from .s3 import get_buckets, get_bucket_cost
 from .iam import get_unused_iam_roles
 
 
@@ -66,8 +66,15 @@ def clean(ctx, dry_run):
 @pass_context
 def s3_(ctx, days):
     session = ctx.obj["session"]
-    buckets = get_old_buckets(session, days)
+    profile = ctx.obj["profile"]
+    buckets = get_buckets(session, days)
+    cost = 0
+    for bucket_name in buckets["old"]:
+        cost += get_bucket_cost(session, bucket_name)
     print(json.dumps(buckets, indent=4))
+    print(
+        f"Run:\n\nacm --profile {profile} clean s3 --days {days}\n\nto delete these resources and save ${cost:.2f} per month"
+    )
 
 
 @check.command("roles")
