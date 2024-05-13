@@ -1,18 +1,14 @@
-import boto3, json
+import boto3
+import json
 from tqdm import tqdm
 from time import sleep
 from datetime import datetime, timedelta, timezone
 
 
 def boto_session(region, profile):
-    try:
-        session = boto3.Session(region_name=region, profile_name=profile)
-        session.client("sts").get_caller_identity()
-        return session
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
+    session = boto3.Session(region_name=region, profile_name=profile)
+    session.client("sts").get_caller_identity()
+    return session
 
 
 def get_lb_hourly_costs(session):

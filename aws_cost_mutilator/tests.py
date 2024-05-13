@@ -1,7 +1,7 @@
-from .lib import *
-import boto3, unittest
-from datetime import datetime, timedelta
-from moto import mock_elbv2, mock_sts, mock_ec2, mock_s3
+from .lib import boto_session, delete_tgs, delete_lbs, disable_lb_deletion_protection
+from .lib import get_tgs_no_targets_or_lb, get_lbs_no_targets
+import boto3
+from moto import mock_elbv2, mock_sts, mock_ec2
 
 
 @mock_sts
@@ -35,8 +35,6 @@ def test_delete_tgs():
 
     # Test deleting target groups
     session = boto3.Session(region_name="us-west-2", profile_name="default")
-    region = "us-west-2"
-    profile = "default"
     tgs = ["tg-1234567890", "tg-0987654321"]
     dry_run = False
     delete_tgs(session, tgs, dry_run)
@@ -47,8 +45,6 @@ def test_delete_tgs():
 
     # Test dry run deleting target groups
     session = boto3.Session(region_name="us-west-2", profile_name="default")
-    region = "us-west-2"
-    profile = "default"
     tgs = ["tg-1234567890", "tg-0987654321"]
     dry_run = True
     delete_tgs(session, tgs, dry_run)
@@ -71,7 +67,10 @@ def test_delete_lbs():
     # Create a mock VPC and a mock subnet
     ec2_client = session.client("ec2")
     vpc_id = ec2_client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]
-    subnet_id = ec2_client.create_subnet(VpcId=vpc_id, CidrBlock="10.0.0.0/24",)[
+    subnet_id = ec2_client.create_subnet(
+        VpcId=vpc_id,
+        CidrBlock="10.0.0.0/24",
+    )[
         "Subnet"
     ]["SubnetId"]
 
@@ -147,7 +146,10 @@ def test_disable_lb_deletion_protection():
     # Create a mock VPC and a mock subnet
     ec2_client = session.client("ec2")
     vpc_id = ec2_client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]
-    subnet_id = ec2_client.create_subnet(VpcId=vpc_id, CidrBlock="10.0.0.0/24",)[
+    subnet_id = ec2_client.create_subnet(
+        VpcId=vpc_id,
+        CidrBlock="10.0.0.0/24",
+    )[
         "Subnet"
     ]["SubnetId"]
 
@@ -191,7 +193,10 @@ def test_scan_for_tgs_no_targets_or_lb():
     # Create a mock VPC and a mock subnet
     ec2_client = session.client("ec2")
     vpc_id = ec2_client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]
-    subnet_id = ec2_client.create_subnet(VpcId=vpc_id, CidrBlock="10.0.0.0/24",)[
+    subnet_id = ec2_client.create_subnet(
+        VpcId=vpc_id,
+        CidrBlock="10.0.0.0/24",
+    )[
         "Subnet"
     ]["SubnetId"]
 
@@ -304,7 +309,10 @@ def test_scan_for_lbs_no_targets():
     # Create a mock VPC and a mock subnet
     ec2_client = session.client("ec2")
     vpc_id = ec2_client.create_vpc(CidrBlock="10.0.0.0/16")["Vpc"]["VpcId"]
-    subnet_id = ec2_client.create_subnet(VpcId=vpc_id, CidrBlock="10.0.0.0/24",)[
+    subnet_id = ec2_client.create_subnet(
+        VpcId=vpc_id,
+        CidrBlock="10.0.0.0/24",
+    )[
         "Subnet"
     ]["SubnetId"]
 
@@ -327,7 +335,7 @@ def test_scan_for_lbs_no_targets():
     tg_arn = tg_response["TargetGroups"][0]["TargetGroupArn"]
 
     # Add the target group to the load balancer
-    listener_arn = elb_client.create_listener(
+    elb_client.create_listener(
         LoadBalancerArn=elb_arn,
         Protocol="HTTP",
         Port=80,

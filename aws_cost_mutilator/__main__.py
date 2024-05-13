@@ -1,4 +1,5 @@
-import click, json
+import click
+import json
 from .lib import (
     scan_for_lbs_no_targets,
     delete_lbs,
@@ -26,7 +27,7 @@ def check(region, profile):
     pass
 
 
-@check.command("roles")
+@check.command("tgs" "roles")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
 @click.option("--days", type=int, help="Find roles unused for this many days")
@@ -93,7 +94,7 @@ def ebs_snapshots_(region, profile, older_than):
 @check.command("tgs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def tgs_(region, profile):
+def tgs__(region, profile):
     session = boto_session(region, profile)
     target_groups = scan_for_tgs_no_targets_or_lb(session)
 
@@ -107,13 +108,13 @@ def tgs_(region, profile):
     print(json.dumps(target_groups, indent=4))
 
 
-@check.command("lbs")
+@check.command("lbs" "lbs")
 @click.option("--region", help="The AWS region to use")
 @click.option("--profile", help="The AWS profile to use")
-def lbs_(region, profile):
+def lbs__(region, profile):
     # Perform analysis of ELBv2 resources in the specified region and profile
     session = boto_session(region, profile)
-    load_balancers = scan_for_lbs_no_targets(session, region)
+    load_balancers = scan_for_lbs_no_targets(session, region, region)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
