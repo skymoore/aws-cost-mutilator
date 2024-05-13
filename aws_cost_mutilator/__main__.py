@@ -187,6 +187,18 @@ def lbs_(ctx):
 # CLEAN COMMANDS
 
 
+@clean.command("s3")
+@option(
+    "--days",
+    type=int,
+    default=365,
+    help="Delete empty buckets and buckets with no objects newer than this number of days",
+)
+@pass_context
+def s3(ctx, days):
+    raise NotImplementedError("This feature is not yet implemented")
+
+
 @clean.command("tgs")
 @pass_context
 def tgs(ctx):
