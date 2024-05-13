@@ -5,7 +5,7 @@ from .lib import (
     delete_ebs_volumes,
 )
 from .lib import get_old_buckets, get_bucket_cost
-from pytest import unittest
+import unittest
 from datetime import datetime, timedelta
 import boto3
 from moto import mock_elbv2, mock_sts, mock_ec2, mock_s3

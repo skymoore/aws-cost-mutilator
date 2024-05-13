@@ -1,38 +1,80 @@
-import click
+from boto3 import Session
+from click import group, option, pass_context
+
 import json
-from .lib import (
+from .ec2 import (
     scan_for_lbs_no_targets,
     delete_lbs,
-    boto_session,
     scan_for_tgs_no_targets_or_lb,
     delete_tgs,
     scan_for_unused_ebs_volumes,
     delete_ebs_volumes,
     get_old_snapshots,
     estimate_snapshots_cost,
-    get_unused_iam_roles,
 )
+from .s3 import get_old_buckets, get_bucket_cost
+from .iam import get_unused_iam_roles
 
 
-@click.group()
-def cli():
+@group()
+@option("--profile", "-p", required=False, help="AWS profile")
+@option("--region", "-r", required=False, help="AWS region")
+@pass_context
+def cli(ctx, profile, region):
     print("Welcome to the AWS Cost Mutilator!")
+    ctx.obj = {}
+
+    if profile and region:
+        ctx.obj["session"] = Session(region_name=region, profile_name=profile)
+        ctx.obj["profile"] = profile
+        ctx.obj["region"] = region
+    elif profile:
+        ctx.obj["session"] = Session(profile_name=profile)
+        ctx.obj["profile"] = profile
+        ctx.obj["region"] = ctx.obj["session"].region_name
+    elif region:
+        ctx.obj["session"] = Session(region_name=region)
+        ctx.obj["profile"] = ctx.obj["session"].profile_name
+        ctx.obj["region"] = region
+    else:
+        ctx.obj["session"] = Session()
+        ctx.obj["profile"] = ctx.obj["session"].profile_name
+        ctx.obj["region"] = ctx.obj["session"].region_name
+
+
+@cli.group()
+@pass_context
+def check(ctx):
     pass
 
 
 @cli.group()
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-def check(region, profile):
+@option("--dry-run", "-d", is_flag=True, help="Perform a dry run")
+@pass_context
+def clean(ctx, dry_run):
+    ctx.obj["dry_run"] = dry_run
     pass
 
 
-@check.command("tgs" "roles")
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--days", type=int, help="Find roles unused for this many days")
-def roles_(region, profile, days):
-    session = boto_session(region, profile)
+@check.command("s3")
+@option(
+    "--days",
+    type=int,
+    default=365,
+    help="Find empty buckets and buckets with no objects newer than this number of days",
+)
+@pass_context
+def s3_(ctx, days):
+    session = ctx.obj["session"]
+    buckets = get_old_buckets(session, days)
+    print(json.dumps(buckets, indent=4))
+
+
+@check.command("roles")
+@option("--days", type=int, help="Find roles unused for this many days")
+@pass_context
+def roles_(ctx, days):
+    session = ctx.obj["session"]
     unused_roles = get_unused_iam_roles(session, days)
 
     if len(unused_roles) == 0:
@@ -46,10 +88,11 @@ def roles_(region, profile, days):
 
 
 @check.command("ebs")
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-def ebs_(region, profile):
-    session = boto_session(region, profile)
+@pass_context
+def ebs_(ctx):
+    session = ctx.obj["session"]
+    region = ctx.obj["region"]
+    profile = ctx.obj["profile"]
     unused_ebs_volumes = scan_for_unused_ebs_volumes(session)
     total_monthly_cost = unused_ebs_volumes["total_monthly_cost"]
     del unused_ebs_volumes["total_monthly_cost"]
@@ -66,12 +109,13 @@ def ebs_(region, profile):
     exit(0)
 
 
-@check.command("ebsnap")
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--older-than", type=int, help="Find snapshots older than this many days")
-def ebs_snapshots_(region, profile, older_than):
-    session = boto_session(region, profile)
+@check.command("ebssnap")
+@option("--older-than", type=int, help="Find snapshots older than this many days")
+@pass_context
+def ebs_snapshots_(ctx, older_than):
+    session = ctx.obj["session"]
+    region = ctx.obj["region"]
+    profile = ctx.obj["profile"]
     old_snapshots = get_old_snapshots(session, older_than)
 
     if len(old_snapshots) == 0:
@@ -92,10 +136,9 @@ def ebs_snapshots_(region, profile, older_than):
 
 
 @check.command("tgs")
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-def tgs__(region, profile):
-    session = boto_session(region, profile)
+@pass_context
+def tgs_(ctx):
+    session = ctx.obj["session"]
     target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     if len(target_groups) == 0:
@@ -108,12 +151,13 @@ def tgs__(region, profile):
     print(json.dumps(target_groups, indent=4))
 
 
-@check.command("lbs" "lbs")
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-def lbs__(region, profile):
+@check.command("lbs")
+@pass_context
+def lbs_(ctx):
     # Perform analysis of ELBv2 resources in the specified region and profile
-    session = boto_session(region, profile)
+    session = ctx.obj["session"]
+    region = ctx.obj["region"]
+    profile = ctx.obj["profile"]
     load_balancers = scan_for_lbs_no_targets(session, region, region)
 
     total_monthly_cost = load_balancers["total_monthly_cost"]
@@ -133,20 +177,14 @@ def lbs__(region, profile):
     exit(0)
 
 
-@cli.group()
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--dry-run", is_flag=True, help="Perform a dry run")
-def clean(region, profile, dry_run):
-    pass
+# CLEAN COMMANDS
 
 
-@clean.command()
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--dry-run", is_flag=True, help="Perform a dry run")
-def tgs(region, profile, dry_run):
-    session = boto_session(region, profile)
+@clean.command("tgs")
+@pass_context
+def tgs(ctx):
+    session = ctx.obj["session"]
+    dry_run = ctx.obj["dry_run"]
     target_groups = scan_for_tgs_no_targets_or_lb(session)
 
     num_tgs = len(target_groups)
@@ -185,13 +223,13 @@ def tgs(region, profile, dry_run):
     exit(0)
 
 
-@clean.command()
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--dry-run", is_flag=True, help="Perform a dry run")
-def lbs(region, profile, dry_run):
+@clean.command("lbs")
+@pass_context
+def lbs(ctx):
     # Perform analysis of ELBv2 resources in the specified region and profile
-    session = boto_session(region, profile)
+    session = ctx.obj["session"]
+    region = ctx.obj["region"]
+    dry_run = ctx.obj["dry_run"]
     load_balancers = scan_for_lbs_no_targets(session, region)
     total_monthly_cost = load_balancers["total_monthly_cost"]
     del load_balancers["total_monthly_cost"]
@@ -228,12 +266,11 @@ def lbs(region, profile, dry_run):
     exit(0)
 
 
-@clean.command()
-@click.option("--region", help="The AWS region to use")
-@click.option("--profile", help="The AWS profile to use")
-@click.option("--dry-run", is_flag=True, help="Perform a dry run")
-def ebs(region, profile, dry_run):
-    session = boto_session(region, profile)
+@clean.command("ebs")
+@pass_context
+def ebs(ctx):
+    session = ctx.obj["session"]
+    dry_run = ctx.obj["dry_run"]
     unused_ebs_volumes = scan_for_unused_ebs_volumes(session)
     total_monthly_cost = unused_ebs_volumes["total_monthly_cost"]
     del unused_ebs_volumes["total_monthly_cost"]
