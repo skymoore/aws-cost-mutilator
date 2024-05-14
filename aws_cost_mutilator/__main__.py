@@ -311,7 +311,7 @@ def ebs(ctx):
             print("Dry run mode enabled, no resources will be deleted.")
 
         delete_ebs_volumes(
-            session, [vol["VolumeId"] for vol in unused_ebs_volumes], dry_run
+            [vol["VolumeId"] for vol in unused_ebs_volumes["volumes"]], session, dry_run
         )
         print(
             f"Deleted {len(unused_ebs_volumes['volumes'])} EBS volumes saving ${total_monthly_cost:.2f} per month."

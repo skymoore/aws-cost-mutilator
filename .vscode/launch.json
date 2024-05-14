@@ -8,12 +8,12 @@
       "module": "aws_cost_mutilator.__main__",
       "cwd": "${workspaceFolder}",
       "args": [
-        "clean",
-        "lbs",
         "--region",
-        "us-west-2",
+        "us-east-1",
         "--profile",
-        "prod-adm"
+        "ir-dev1",
+        "clean",
+        "ebs"
         //"--dry-run"
       ],
       // "envFile": "${workspaceFolder}/.env",
